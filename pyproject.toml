@@ -32,6 +32,12 @@ dependencies = [
     "python-dotenv>=0.19.0",
     "beautifulsoup4>=4.10.0",
     "requests>=2.25.0"
+    "webdriver-manager>=3.4.2",
+    "flask>=2.0.0",
+    "requests>=2.25.0",
+    "markdownify>=0.11.0",
+    "cachetools>=4.0.0",
+    "tiktoken>=0.4.0",
 ]
 
 [project.optional-dependencies]
