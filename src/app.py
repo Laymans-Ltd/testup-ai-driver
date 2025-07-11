@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request, Response, redirect
 import logging
 import os
-from action_processor import DomAnalyzer
+from testup_ai_driver.action_processor import DomAnalyzer
 
 app = Flask(__name__)
 
