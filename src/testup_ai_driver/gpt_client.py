@@ -21,17 +21,29 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 class GptClient:
     # Load environment variables from .env file
     path_to_env_file = Path(__file__).parent.parent / '.env'
-    load_dotenv(dotenv_path=path_to_env_file, verbose = True)
+    load_dotenv(dotenv_path=path_to_env_file, verbose=True)
 
     gpt_api_key = os.getenv("OPENAI_API_KEY")
     x_api_key = os.getenv('X_API_KEY', "")
     max_requests_per_minute = os.getenv("MAX_REQUESTS", 10)
     max_tokens_per_minute = os.getenv("MAX_TOKENS", 160000)
-    gpt_model = os.getenv("GPT_MODEL", "gpt-3.5-turbo-1106")
+    gpt_model = os.getenv("GPT_MODEL", "gpt-3.5-turbo")  # Safe default
 
     def __init__(self):
         logging.info("initiating GPT client")
+        
+        # Validate required environment variables
+        if not self.gpt_api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+        
+        # Ensure model is not empty after environment loading
+        if not self.gpt_model or self.gpt_model.strip() == "":
+            self.gpt_model = "gpt-3.5-turbo"
+            logging.warning("No GPT_MODEL specified, using default: gpt-3.5-turbo")
+        
         self.operation_lock = threading.Lock()
+        
+        # Configure rate limiter based on model
         if "gpt" in self.gpt_model:
             self.rate_limiter = RateLimiter(max_requests_per_minute=20, max_tokens_per_minute=160000)
         elif "claude-3-opus" in self.gpt_model:
@@ -41,7 +53,15 @@ class GptClient:
         elif "claude-3-sonnet" in self.gpt_model:
             self.rate_limiter = RateLimiter(max_requests_per_minute=10, max_tokens_per_minute=40000)
         else:
-            raise Exception("No Rate Limiter for this model configured")
+            # Default rate limiter for unknown models
+            logging.warning(f"Unknown model {self.gpt_model}, using default rate limiter")
+            self.rate_limiter = RateLimiter(max_requests_per_minute=20, max_tokens_per_minute=160000)
+
+    def get_safe_model(self):
+        """Get model with safe default fallback"""
+        if not self.gpt_model or self.gpt_model.strip() == "":
+            return "gpt-3.5-turbo"  # Safe default
+        return self.gpt_model
 
     def num_tokens_from_messages(self, messages, model="gpt-3.5-turbo-1106"):
         """Return the number of tokens used by a list of messages."""
@@ -50,6 +70,7 @@ class GptClient:
         except KeyError:
             print("Warning: model not found. Using cl100k_base encoding.")
             encoding = tiktoken.get_encoding("cl100k_base")
+        
         if model in {
             "gpt-3.5-turbo-1106",
             "gpt-3.5-turbo-0613",
@@ -65,15 +86,16 @@ class GptClient:
             tokens_per_message = 4  # every message follows <|start|>{role/name}\n{content}<|end|>\n
             tokens_per_name = -1  # if there's a name, the role is omitted
         elif "gpt-3.5-turbo" in model:
-            print("Warning: gpt-3.5-turbo may update over time. Returning num tokens assuming gpt-3.5-turbo-0613.")
-            return messages.num_tokens_from_messages(messages, model="gpt-3.5-turbo-1106")
+            print("Warning: gpt-3.5-turbo may update over time. Returning num tokens assuming gpt-3.5-turbo-1106.")
+            return self.num_tokens_from_messages(messages, model="gpt-3.5-turbo-1106")  # Fixed recursive call
         elif "gpt-4" in model:
             print("Warning: gpt-4 may update over time. Returning num tokens assuming gpt-4-0613.")
-            return messages.num_tokens_from_messages(messages, model="gpt-4-0613")
+            return self.num_tokens_from_messages(messages, model="gpt-4-0613")  # Fixed recursive call
         else:
             raise NotImplementedError(
                 f"""num_tokens_from_messages() is not implemented for model {model}. See https://github.com/openai/openai-python/blob/main/chatml.md for information on how messages are converted to tokens."""
             )
+        
         num_tokens = 0
         for message in messages:
             num_tokens += tokens_per_message
@@ -85,25 +107,39 @@ class GptClient:
         return num_tokens
 
     def make_request(self, contents):
-
-        if "gpt-3.5-turbo-1106" in self.gpt_model:
+        # Use safe model instead of potentially null value
+        safe_model = self.get_safe_model()
+        
+        # Initialize api_info to None for safety
+        api_info = None
+        
+        if "gpt-3.5-turbo-1106" in safe_model:
             api_info = api_map_json["gpt-3.5-turbo-1106"]
-        elif "gpt-3.5-turbo" in self.gpt_model:
+        elif "gpt-3.5-turbo" in safe_model:
             api_info = api_map_json["gpt-3.5-turbo"]
-        elif "claude-3-opus-20240229" in self.gpt_model:
+        elif "claude-3-opus-20240229" in safe_model:
             api_info = api_map_json["claude-3-opus-20240229"]
-        elif "claude-3-haiku-20240307" in self.gpt_model:
+        elif "claude-3-haiku-20240307" in safe_model:
             api_info = api_map_json["claude-3-haiku-20240307"]
-        elif "claude-3-sonnet-20240229" in self.gpt_model:
+        elif "claude-3-sonnet-20240229" in safe_model:
             api_info = api_map_json["claude-3-sonnet-20240229"]
+        else:
+            # Fallback to default OpenAI model
+            logging.warning(f"Unsupported model {safe_model}, falling back to gpt-3.5-turbo")
+            api_info = api_map_json.get("gpt-3.5-turbo")
+            if api_info is None:
+                raise ValueError(f"Default model 'gpt-3.5-turbo' not found in api_map_json")
+            safe_model = "gpt-3.5-turbo"
+        
+        # Verify api_info was properly assigned
+        if api_info is None:
+            raise ValueError(f"Failed to configure API info for model: {safe_model}")
 
-
-
-        payload = api_info['payload'](self.gpt_model, contents)
+        payload = api_info['payload'](safe_model, contents)
         num_token = self.num_tokens_from_messages(payload["messages"])
         self.rate_limiter.wait_and_check(num_token)
 
-        if self.gpt_model in ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"]:
+        if safe_model in ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"]:
             headers = {
                 "Content-Type": "application/json",
                 "anthropic-version": "2023-06-01",
@@ -112,7 +148,6 @@ class GptClient:
 
             response = requests.post(api_info['endpoint'], headers=headers, json=payload)
             return self.extract_response_claude(response)
-
         else:
             headers = {
                 "Content-Type": "application/json",
@@ -125,8 +160,6 @@ class GptClient:
 
             response = requests.post(api_info['endpoint'], headers=headers, json=payload)
             return self.extract_response_gpt(response)
-
-
 
     def extract_response_gpt(self, response):
         response_data = response.json()
@@ -150,7 +183,7 @@ class GptClient:
 
             try:
                 # Parse the extracted content as JSON
-                assistant_message_json_str = assistant_message_json_str.replace("```json", "").replace("```", "").strip()
+                assistant_message_json_str = assistant_message_json_str.replace("``````", "").strip()
                 assistant_message = assistant_message_json_str
             except json.JSONDecodeError:
                 raise Exception("Error decoding the extracted content as JSON.")
@@ -174,9 +207,6 @@ class GptClient:
             if response_object_type == 'message':
                 # Handling response for 'chat.completion'
                 assistant_message_json_str = response_data["content"][0].get("text", {})
-            # elif response_object_type == 'text_completion':
-            #     # Handling response for 'text_completion'
-            #     assistant_message_json_str = response_data["choices"][0].get("text", "")
             else:
                 raise Exception("Unknown response object type.")
 
@@ -185,7 +215,7 @@ class GptClient:
 
             try:
                 # Parse the extracted content as JSON
-                assistant_message_json_str = assistant_message_json_str.replace("```json", "").replace("```", "").strip()
+                assistant_message_json_str = assistant_message_json_str.replace("``````", "").strip()
                 assistant_message = assistant_message_json_str
             except json.JSONDecodeError:
                 raise Exception("Error decoding the extracted content as JSON.")
@@ -205,5 +235,5 @@ class TokenLimitExceededError(Exception):
 
 
 class RateLimitExceededError(Exception):
-    """GPT token limit exceeded"""
+    """GPT rate limit exceeded"""
     pass
