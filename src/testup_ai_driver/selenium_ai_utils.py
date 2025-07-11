@@ -3,13 +3,16 @@ from selenium import webdriver
 from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException, NoSuchElementException
-import . from  action_processor
+from selenium.webdriver.common.action_chains import ActionChains
 import logging
 import time
-from user_exceptions import PromptActionException
-from user_exceptions import SeleniumBrokenLinkException
-from test_steps import TestSteps
-from selenium.webdriver.common.action_chains import ActionChains
+
+# Relative imports for package modules
+from . import action_processor
+from .user_exceptions import PromptActionException
+from .user_exceptions import SeleniumBrokenLinkException
+from .test_steps import TestSteps
+
 
 
 
