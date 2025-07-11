@@ -2,10 +2,10 @@ import logging
 import time
 from threading import Lock
 
-
+# Relative import for package modules
+from .gpt_client import TokenLimitExceededError
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 
 class RateLimiter:
 
@@ -27,8 +27,8 @@ class RateLimiter:
             # logging.info("acquired lock to set tokens")
             self.token_count += token_consumed
 
-    def check_and_update_limits(self,num_tokens):
-        from gpt_client import TokenLimitExceededError
+    def check_and_update_limits(self, num_tokens):
+        # ✅ REMOVED absolute import - now using module-level relative import
         # logging.info("Going to wait and check once")
         current_time = time.time()
         elapsed_time = current_time - self.window_start
