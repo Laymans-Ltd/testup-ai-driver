@@ -1,10 +1,16 @@
-from md_converter import convert_to_md
+# Relative imports for package modules
+from .md_converter import convert_to_md
+from .gpt_client import GptClient, TokenLimitExceededError, RateLimitExceededError
+
+# External library imports
 from cachetools import TTLCache
-from gpt_client import GptClient, TokenLimitExceededError, RateLimitExceededError
+
+# Standard library imports
 import re
 import logging
 import time
 import json
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
