@@ -1,15 +1,19 @@
+# Standard library imports
 import threading
 import os
 import logging
-import tiktoken
+import json
 from pathlib import Path
 
+# External library imports
+import tiktoken
 import requests
-import json
-
-from rate_limiter import RateLimiter
-from gpt_api_spec import api_map_json
 from dotenv import load_dotenv
+
+# Relative imports for package modules
+from .rate_limiter import RateLimiter
+from .gpt_api_spec import api_map_json
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
