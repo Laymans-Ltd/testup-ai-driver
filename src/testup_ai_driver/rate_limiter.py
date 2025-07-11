@@ -1,6 +1,6 @@
-import logging
 import time
 from threading import Lock
+import logging
 
 # Relative import for package modules
 from .gpt_client import TokenLimitExceededError
@@ -8,7 +8,6 @@ from .gpt_client import TokenLimitExceededError
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class RateLimiter:
-
     def __init__(self, max_requests_per_minute, max_tokens_per_minute):
         self.max_requests_per_minute = max_requests_per_minute
         self.max_tokens_per_minute = max_tokens_per_minute
@@ -35,8 +34,10 @@ class RateLimiter:
 
         if elapsed_time >= 61:  # More than a minute has passed, reset window
             self.reset_window()
+        
         if num_tokens > self.max_tokens_per_minute:
             raise TokenLimitExceededError("Message larger than token per minute limit")
+        
         if self.request_count < self.max_requests_per_minute and (self.token_count + num_tokens) <= self.max_tokens_per_minute:
             self.request_count += 1
             return True
