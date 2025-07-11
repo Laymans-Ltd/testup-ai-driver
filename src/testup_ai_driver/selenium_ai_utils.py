@@ -3,7 +3,7 @@ from selenium import webdriver
 from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException, NoSuchElementException
-import action_processor
+import . from  action_processor
 import logging
 import time
 from user_exceptions import PromptActionException
